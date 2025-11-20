@@ -118,7 +118,21 @@ def train_kpi_detection(
         df = pd.read_excel(data_path)
 
     df["annotation_answer"] = df["annotation_answer"].astype(str)
+    
+    # Check if the column "answer_start" exists and add if not non-existing
+    if "answer_start" not in df.columns:
+        # Column doesn't exist, create it for all rows
+        df["answer_start"] = df.apply(lambda row: row["context"].find(row["annotation_answer"]), axis=1)
+    else:
+        # Column exists, only update null values
+        mask = df["answer_start"].isnull()
+        df.loc[mask, "answer_start"] = df[mask].apply(lambda row: row["context"].find(row["annotation_answer"]), axis=1)
+    
+    # Remove unhelpful rows, probably negative example from relevance training
+    df = df[(df["answer_start"] != -1) & (df["label"] == 1)]
+    
     df = df[["question", "context", "annotation_answer", "answer_start"]]
+    df = df.reset_index(drop=True)
 
     def expand_rows(df, column):
         # Create a new DataFrame where each list element becomes a separate row
@@ -176,13 +190,10 @@ def train_kpi_detection(
             questions,
             contexts,
             max_length=max_length,
-            truncation=True,
+            truncation="only_second",  # Only truncate context, not question
             padding="max_length",
+            return_offsets_mapping=True,  # This is key for accurate position mapping
         )
-
-        tokenized_inputs = {
-            key: val.to(device) for key, val in tokenized_inputs.items()
-        }
 
         # Initialize lists to hold start and end positions
         start_positions = []
@@ -190,33 +201,63 @@ def train_kpi_detection(
 
         # Loop through each example
         for i in range(len(questions)):
-            # Get the answer start index
-            answer_start = answer_starts[i]
+            # Get the offset mapping for this example
+            offsets = tokenized_inputs["offset_mapping"][i]
+
+            # Get the answer start and end character positions
+            answer_start_char = answer_starts[i]
             answer = answers[i]
 
-            if answer_start == -1:
+            if answer_start_char == -1 or answer == "":
+                # No answer case
                 start_positions.append(0)
                 end_positions.append(0)
             else:
-                start_positions.append(
-                    tokenizer.encode(
-                        contexts[i][:answer_start], add_special_tokens=False
-                    ).__len__()
-                )
-                end_positions.append(
-                    tokenizer.encode(
-                        contexts[i][: answer_start + len(answer)],
-                        add_special_tokens=False,
-                    ).__len__()
-                    - 1
-                )
+                answer_end_char = answer_start_char + len(answer)
 
-        tokenized_inputs.update(
-            {
-                "start_positions": torch.tensor(start_positions).to(device),
-                "end_positions": torch.tensor(end_positions).to(device),
-            }
-        )
+                # Find the token positions that correspond to the answer
+                token_start_index = 0
+                token_end_index = 0
+
+                # Find start position
+                for idx, (offset_start, offset_end) in enumerate(offsets):
+                    if offset_start <= answer_start_char < offset_end:
+                        token_start_index = idx
+                        break
+                    elif offset_start > answer_start_char:
+                        token_start_index = idx
+                        break
+
+                # Find end position
+                for idx, (offset_start, offset_end) in enumerate(offsets):
+                    if offset_start < answer_end_char <= offset_end:
+                        token_end_index = idx
+                        break
+                    elif offset_start >= answer_end_char:
+                        token_end_index = idx - 1
+                        break
+
+                # Handle edge cases where answer might be truncated
+                sequence_ids = tokenized_inputs.sequence_ids(i)
+
+                # Check if the answer is in the context (sequence_id = 1)
+                # If the answer position is in the question or special tokens, set to (0, 0)
+                if (token_start_index >= len(sequence_ids) or 
+                    token_end_index >= len(sequence_ids) or
+                    sequence_ids[token_start_index] != 1 or 
+                    sequence_ids[token_end_index] != 1):
+                    start_positions.append(0)
+                    end_positions.append(0)
+                else:
+                    start_positions.append(token_start_index)
+                    end_positions.append(token_end_index)
+
+        # Remove offset_mapping as it's not needed for training
+        tokenized_inputs.pop("offset_mapping")
+
+        # Add start and end positions (as lists, not tensors)
+        tokenized_inputs["start_positions"] = start_positions
+        tokenized_inputs["end_positions"] = end_positions
 
         return tokenized_inputs
 
@@ -227,12 +268,16 @@ def train_kpi_detection(
     )
 
     # Apply the preprocessing function to the dataset
-    processed_datasets = data.map(preprocess_function_with_max_length, batched=True)
+    processed_datasets = data.map(
+        preprocess_function_with_max_length, 
+        batched=True,
+    )
 
     # Remove columns that are not needed
     processed_datasets = processed_datasets.remove_columns(
         ["question", "context", "annotation_answer", "answer_start"]
     )
+
 
     data_collator = DefaultDataCollator()
 
@@ -241,7 +286,7 @@ def train_kpi_detection(
     os.makedirs(saved_model_path, exist_ok=True)
 
     checkpoint_dir = os.path.join(saved_model_path, "checkpoints")
-    os.makedirs(saved_model_path, exist_ok=True)
+    os.makedirs(checkpoint_dir, exist_ok=True)
 
     training_args = TrainingArguments(
         output_dir=checkpoint_dir,

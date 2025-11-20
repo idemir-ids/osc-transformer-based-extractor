@@ -140,6 +140,10 @@ def run_full_inference_kpi_detection(
     else:
         device = torch.device("cpu")  # Fallback to CPU
         print("Using CPU")
+        
+    # Remove unhelpful rows, probably negative example from relevance detection
+    data = data[data["paragraph_relevance_flag"] == 1]
+    data = data.reset_index(drop=True)
 
     # Initialize the question-answering pipeline
     question_answerer = pipeline("question-answering", model=model_path, device=device)
@@ -162,17 +166,17 @@ def run_full_inference_kpi_detection(
             batch_size=batch_size,
         )
 
-        for result in batch_results:
-            print()
-            results.append(
-                {
-                    "predicted_answer": result["answer"],
-                    "start": result["start"],
-                    "end": result["end"],
-                    "score": result["score"],
-                }
-            )
-
+        for batch in batch_results:
+            for result in batch:
+                results.append(
+                    {
+                        "predicted_answer": result["answer"],
+                        "start": result["start"],
+                        "end": result["end"],
+                        "score": result["score"],
+                    }
+                )
+                 
     df = pd.DataFrame(results)
     combined_df = pd.concat([data, df], axis=1)
     if "Unnamed: 0" in combined_df.columns:
@@ -196,6 +200,10 @@ def run_full_inference_kpi_detection(
             "end",
         ]
     ]
+    
+    file_name = Path(output_path) / "output_unverified.xlsx"
+    combined_df.to_excel(file_name, index=False)
+    print(f"Successfully SAVED UNVERIFIED resulting file at {file_name}")
 
     verifier_model = AutoModelForCausalLM.from_pretrained(
         "microsoft/Phi-3.5-mini-instruct", torch_dtype="auto", trust_remote_code=True
@@ -246,6 +254,7 @@ def llm_2fv(
     grouped = df.groupby(["pdf_name", "kpi_id"])
 
     for (pdf_name, kpi_id), group in grouped:
+        print(f"[llm_2fv] {pdf_name} => {kpi_id}")
         group = group.sort_values(
             by=["paragraph_relevance_score(for_label=1)"], ascending=False
         ).head(4)
@@ -279,6 +288,7 @@ def llm_2fv(
         output_text = verifier_tokenizer.decode(outputs[0], skip_special_tokens=True)
 
         num = extract_paragraph_number(output_text)
+        print(group.iloc[num - 1])
         result_rows.append(group.iloc[num - 1])
 
     return pd.DataFrame(result_rows).reset_index(drop=True)
