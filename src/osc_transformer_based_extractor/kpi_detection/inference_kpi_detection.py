@@ -255,39 +255,43 @@ def llm_2fv(
 
     for (pdf_name, kpi_id), group in grouped:
         print(f"[llm_2fv] {pdf_name} => {kpi_id}")
+        
         group = group.sort_values(
             by=["paragraph_relevance_score(for_label=1)"], ascending=False
         ).head(4)
-        question = group["question"].iloc[0]
 
-        pairs = [
-            f"**Paragraph {i + 1}**: {p}\n   **Answer {i + 1}**: {a}\n"
-            for i, (p, a) in enumerate(zip(group["context"], group["predicted_answer"]))
-        ]
-        combined_pairs = "\n\n".join(pairs)
-
-        content = (
-            f"### Instruction:\n"
-            f"You are tasked with analyzing a question extracted from a PDF, along with multiple paragraph-answer pairs. "
-            f"Your task is to identify the **most relevant paragraph-answer pair** based on the given information and explain your reasoning.\n\n"
-            f"### Input:\n"
-            f"**Question**: {question}\n\n"
-            f"**Paragraph-Answer Pairs**:\n\n"
-            f"{combined_pairs}\n\n"
-            f"### Task:\n"
-            f"1. Identify which **paragraph-answer pair** is the most relevant.\n"
-            f"2. Give me the page number.\n\n"
-            f"3. Provide a clear and concise explanation for your choice, considering the content.\n\n"
-            f"### Response:\n"
-        )
-
-        inputs = verifier_tokenizer(content, return_tensors="pt").to(device)
-        outputs = verifier_model.generate(
-            **inputs, max_new_tokens=500, temperature=0.0, do_sample=False
-        )
-        output_text = verifier_tokenizer.decode(outputs[0], skip_special_tokens=True)
-
-        num = extract_paragraph_number(output_text)
+## Commented out for now, as this is very slow
+##        question = group["question"].iloc[0]
+##        pairs = [
+##            f"**Paragraph {i + 1}**: {p}\n   **Answer {i + 1}**: {a}\n"
+##            for i, (p, a) in enumerate(zip(group["context"], group["predicted_answer"]))
+##        ]
+##        combined_pairs = "\n\n".join(pairs)
+##
+##        content = (
+##            f"### Instruction:\n"
+##            f"You are tasked with analyzing a question extracted from a PDF, along with multiple paragraph-answer pairs. "
+##            f"Your task is to identify the **most relevant paragraph-answer pair** based on the given information and explain your reasoning.\n\n"
+##            f"### Input:\n"
+##            f"**Question**: {question}\n\n"
+##            f"**Paragraph-Answer Pairs**:\n\n"
+##            f"{combined_pairs}\n\n"
+##            f"### Task:\n"
+##            f"1. Identify which **paragraph-answer pair** is the most relevant.\n"
+##            f"2. Give me the page number.\n\n"
+##            f"3. Provide a clear and concise explanation for your choice, considering the content.\n\n"
+##            f"### Response:\n"
+##        )
+##
+##        inputs = verifier_tokenizer(content, return_tensors="pt").to(device)
+##        outputs = verifier_model.generate(
+##            **inputs, max_new_tokens=500, temperature=0.0, do_sample=False
+##        )
+##        output_text = verifier_tokenizer.decode(outputs[0], skip_special_tokens=True)
+##
+##        num = extract_paragraph_number(output_text)
+        
+        num = 1
         print(group.iloc[num - 1])
         result_rows.append(group.iloc[num - 1])
 
