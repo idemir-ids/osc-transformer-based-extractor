@@ -292,7 +292,7 @@ def llm_2fv(
 ##        num = extract_paragraph_number(output_text)
         
         num = 1
-        print(group.iloc[num - 1])
+        #print(group.iloc[num - 1])
         result_rows.append(group.iloc[num - 1])
 
     return pd.DataFrame(result_rows).reset_index(drop=True)
