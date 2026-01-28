@@ -277,6 +277,11 @@ def train_kpi_detection(
     processed_datasets = processed_datasets.remove_columns(
         ["question", "context", "annotation_answer", "answer_start"]
     )
+    
+    # Remove rows with bad token start/end position
+    processed_datasets["train"] = processed_datasets["train"].filter(lambda x: x['end_positions'] != 0)
+    processed_datasets["test"] = processed_datasets["test"].filter(lambda x: x['end_positions'] != 0)
+    
 
 
     data_collator = DefaultDataCollator()
@@ -351,6 +356,7 @@ def train_kpi_detection(
     accuracy = np.mean(
         (predicted_starts == true_starts) & (predicted_ends == true_ends)
     )
+    print("Trained on data points: ", len(processed_datasets["train"]))
     print("Accuracy:", accuracy)
 
     # Print inputs along with predicted and true answer spans
