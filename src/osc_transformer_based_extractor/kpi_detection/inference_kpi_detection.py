@@ -201,6 +201,8 @@ def run_full_inference_kpi_detection(
         ]
     ]
     
+    combined_df["final_score"] = combined_df["paragraph_relevance_score(for_label=1)"] * combined_df["score"]
+    
     file_name = Path(output_path) / "output_unverified.xlsx"
     combined_df.to_excel(file_name, index=False)
     print(f"Successfully SAVED UNVERIFIED resulting file at {file_name}")
@@ -257,7 +259,7 @@ def llm_2fv(
         print(f"[llm_2fv] {pdf_name} => {kpi_id}")
         
         group = group.sort_values(
-            by=["paragraph_relevance_score(for_label=1)"], ascending=False
+            by=["final_score"], ascending=False
         ).head(4)
 
 ## Commented out for now, as this is very slow

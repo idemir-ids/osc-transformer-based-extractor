@@ -352,13 +352,6 @@ def train_kpi_detection(
         [example["end_positions"] for example in processed_datasets["test"]]
     )
 
-    # Calculate accuracy (you might want a different metric depending on your needs)
-    accuracy = np.mean(
-        (predicted_starts == true_starts) & (predicted_ends == true_ends)
-    )
-    print("Trained on data points: ", len(processed_datasets["train"]))
-    print("Accuracy:", accuracy)
-
     # Print inputs along with predicted and true answer spans
     for i in range(len(processed_datasets["test"])):
         eva_data = processed_datasets["test"][i]
@@ -381,3 +374,10 @@ def train_kpi_detection(
         print(f"Input: {input_text}")
         print(f"True Answer: {true_answer}")
         print(f"Predicted Answer: {predicted_answer}")
+
+    # Calculate accuracy (you might want a different metric depending on your needs)
+    accuracy = np.mean(
+        (predicted_starts == true_starts) & (predicted_ends == true_ends)
+    )
+    print("Trained on data points: ", len(processed_datasets["train"]))
+    print("Accuracy:", accuracy)

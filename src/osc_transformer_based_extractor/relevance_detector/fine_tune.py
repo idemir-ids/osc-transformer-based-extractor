@@ -295,10 +295,6 @@ def fine_tune_model(
         eval_dataset[idx]["labels"].item() for idx in range(len(eval_dataset))
     ]
 
-    # Calculate accuracy
-    accuracy = accuracy_score(true_labels, predicted_labels)
-    print("Accuracy:", accuracy)
-
     # Print inputs along with predicted labels
     for i in range(len(eval_dataset)):
         eva_data = eval_dataset[i]
@@ -308,6 +304,20 @@ def fine_tune_model(
         print(f"Input: {tokenizer.decode(input_ids, skip_special_tokens=True)}")
         print(f"True Label: {true_label}, Predicted Label: {predicted_label}")
         print("\n")
+
+    # Calculate metrics
+    precision, recall, f1, _ = precision_recall_fscore_support(
+        true_labels, predicted_labels, average="weighted"
+    )
+    acc = accuracy_score(true_labels, predicted_labels)
+    metrics = {
+            "accuracy": acc,
+            "f1": f1,
+            "precision": precision,
+            "recall": recall,
+        }
+    print(f"Metrics: {metrics}")
+
 
     try:
         shutil.rmtree(checkpoint_dir)
