@@ -126,10 +126,19 @@ def run_full_inference_kpi_detection(
     output_path = str(Path(output_path))
     model_path = resolve_model_path(model_path)
 
-    if data_file_path.endswith(".csv"):
-        data = pd.read_csv(data_file_path)
-    else:
-        data = pd.read_excel(data_file_path)
+    try:
+        if data_file_path.endswith(".csv"):
+            data = pd.read_csv(data_file_path)
+        else:
+            data = pd.read_excel(data_file_path)
+    except:
+        # nothing found, or loading was not possible. save empty result for now
+        file_name = Path(output_path) / "output.xlsx"
+        empty_df = pd.DataFrame()
+        empty_df.to_excel(file_name, index=False)
+        print(f"Could not find relevance data. Successfully SAVED EMPTY resulting file at {file_name}")
+        return
+
 
     if torch.cuda.is_available():
         device = torch.device("cuda")  # Use NVIDIA GPU
@@ -167,6 +176,7 @@ def run_full_inference_kpi_detection(
         )
 
         for batch in batch_results:
+            batch = batch if isinstance(batch, list) else [batch] #bugfix: if batch is only single entry, make it a list
             for result in batch:
                 results.append(
                     {
@@ -181,9 +191,23 @@ def run_full_inference_kpi_detection(
     combined_df = pd.concat([data, df], axis=1)
     if "Unnamed: 0" in combined_df.columns:
         combined_df.drop(columns=["Unnamed: 0"], inplace=True)
-    combined_df.sort_values(
-        by=["pdf_name", "kpi_id", "score"], inplace=True, ascending=[True, True, False]
-    )
+    try:
+        combined_df.sort_values(
+            by=["pdf_name", "kpi_id", "score"], inplace=True, ascending=[True, True, False]
+        )
+    except KeyError:
+        # empty, no need to sort
+        # Add missing columns
+        if "score" not in combined_df.columns:
+            combined_df["score"] = None
+        if "predicted_answer" not in combined_df.columns:
+            combined_df["predicted_answer"] = None
+        if "start" not in combined_df.columns:
+            combined_df["start"] = None
+        if "end" not in combined_df.columns:
+            combined_df["end"] = None
+    
+    
     combined_df = combined_df[
         [
             "pdf_name",

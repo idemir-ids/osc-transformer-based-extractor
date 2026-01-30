@@ -85,7 +85,7 @@ def inference_qna(
 ):
     """Perform inference using a pre-trained model on a dataset of kpis and contexts, saving an output Excel file."""
     try:
-        validate_path_exists(data_file_path, "data_file_path")
+        #validate_path_exists(data_file_path, "data_file_path")
         validate_path_exists(output_path, "output_path")
 
         run_full_inference_kpi_detection(
